@@ -1,16 +1,16 @@
 "use strict";
-
 const SudokuSolver = require("../controllers/sudoku-solver.js");
-
 module.exports = function (app) {
   let solver = new SudokuSolver();
-
   app.route("/api/check").post((req, res) => {
     const { puzzle, coordinate, value } = req.body;
+    
+    // Check for missing fields
     if (!puzzle || !coordinate || !value) {
-      res.json({ error: "Required field(s) missing" });
-      return;
+      return res.json({ error: "Required field(s) missing" });
     }
+    
+    // Validate coordinate
     const row = coordinate.split("")[0];
     const column = coordinate.split("")[1];
     if (
@@ -18,61 +18,76 @@ module.exports = function (app) {
       !/[a-i]/i.test(row) ||
       !/[1-9]/i.test(column)
     ) {
-      console.log("invalid coordinate :>> ");
-      res.json({ error: "Invalid coordinate" });
-      return;
+      return res.json({ error: "Invalid coordinate" });
     }
-    if (!/[1-9]/i.test(value)) {
-      res.json({ error: "Invalid value" });
-      return;
+    
+    // Strict validation for value - must be a single digit from 1-9
+    if (value.toString().length !== 1 || !/^[1-9]$/.test(value)) {
+      return res.json({ error: "Invalid value" });
     }
-    if (puzzle.length != 81) {
-      res.json({ error: "Expected puzzle to be 81 characters long" });
-      return;
+    
+    // Validate puzzle
+    if (puzzle.length !== 81) {
+      return res.json({ error: "Expected puzzle to be 81 characters long" });
     }
+    
     if (/[^0-9.]/g.test(puzzle)) {
-      res.json({ error: "Invalid characters in puzzle" });
-      return;
+      return res.json({ error: "Invalid characters in puzzle" });
     }
+    
+    // Convert row to index (A=0, B=1, etc.)
+    const rowIndex = row.toLowerCase().charCodeAt(0) - 97;
+    const colIndex = parseInt(column) - 1;
+    const puzzleIndex = rowIndex * 9 + colIndex;
+    
+    // Check if value is already placed at the coordinate
+    if (puzzle[puzzleIndex] === value) {
+      return res.json({ valid: true });
+    }
+    
+    // Perform placement checks
     let validCol = solver.checkColPlacement(puzzle, row, column, value);
     let validReg = solver.checkRegionPlacement(puzzle, row, column, value);
     let validRow = solver.checkRowPlacement(puzzle, row, column, value);
-    let conflicts = [];
+    
+    // Prepare response
     if (validCol && validReg && validRow) {
-      res.json({ valid: true });
+      return res.json({ valid: true });
     } else {
-      if (!validRow) {
-        conflicts.push("row");
-      }
-      if (!validCol) {
-        conflicts.push("column");
-      }
-      if (!validReg) {
-        conflicts.push("region");
-      }
-      res.json({ valid: false, conflict: conflicts });
+      const conflicts = [];
+      if (!validRow) conflicts.push("row");
+      if (!validCol) conflicts.push("column");
+      if (!validReg) conflicts.push("region");
+      return res.json({ valid: false, conflict: conflicts });
     }
   });
-
+  
   app.route("/api/solve").post((req, res) => {
     const { puzzle } = req.body;
+    
+    // Check for missing puzzle
     if (!puzzle) {
-      res.json({ error: "Required field missing" });
-      return;
+      return res.json({ error: "Required field missing" });
     }
-    if (puzzle.length != 81) {
-      res.json({ error: "Expected puzzle to be 81 characters long" });
-      return;
+    
+    // Validate puzzle length
+    if (puzzle.length !== 81) {
+      return res.json({ error: "Expected puzzle to be 81 characters long" });
     }
+    
+    // Validate puzzle characters
     if (/[^0-9.]/g.test(puzzle)) {
-      res.json({ error: "Invalid characters in puzzle" });
-      return;
+      return res.json({ error: "Invalid characters in puzzle" });
     }
+    
+    // Attempt to solve
     let solvedString = solver.solve(puzzle);
+    
+    // Return solution or error
     if (!solvedString) {
-      res.json({ error: "Puzzle cannot be solved" });
+      return res.json({ error: "Puzzle cannot be solved" });
     } else {
-      res.json({ solution: solvedString });
+      return res.json({ solution: solvedString });
     }
   });
 };
